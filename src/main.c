@@ -165,6 +165,7 @@ void main(void)
 				{
 					Gpio_WritePin(GPIO_B,HAZARD_LED,LOW);
 					hazard_led_flag = 0;
+					Vehicle_Lock = LOCKED;
 				}
 			}
 			else
