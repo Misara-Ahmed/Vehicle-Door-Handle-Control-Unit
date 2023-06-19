@@ -21,7 +21,9 @@ void GPT_Init(void)
     TIM4_CR1 &= ~(1 << 4);
 
     // Disable the auto-reload preload (ARPE)
-    TIM4_CR1 &= ~(1 << 7);
+    //TIM4_CR1 &= ~(1 << 7);
+
+    //TIM4_CR1 |= (1 << 7);
 
 }
 
@@ -40,8 +42,15 @@ void GPT_StartTimer(uint32 OverFlowTicks)
 uint8 GPT_CheckTimeIsElapsed(void)
 {
     // Check if the counter (CNT) has reached the auto-reload value (ARR)
-    if( TIM4_CNT == TIM4_ARR )
+    if( TIM4_CNT == TIM4_ARR-1 )
     {
+    	TIM4_CNT = 0;
+
+    	TIM4_ARR = 1;
+
+    	// Disable the counter (CEN bit)
+    	TIM4_CR1 &= ~(1 << 0);
+
         return 1;
     }
     else
