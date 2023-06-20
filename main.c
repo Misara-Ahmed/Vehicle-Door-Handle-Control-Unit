@@ -1,103 +1,47 @@
 #include "Gpio.h"
 #include "Rcc.h"
 #include "Std_Types.h"
-#include "keypad.h"
 #include "Bit_Operations.h"
-#include "stm32f401xe.h"
-#include "Gpio_private.h"
 #include "TIM.h"
-typedef struct {
-	uint32 IMR;
-	uint32 EMR;
-	uint32 RTSR;
-	uint32 FTSR;
-	uint32 SWIER;
-	uint32 PR;
-} ExtiType;
 
-typedef struct{
-	uint32 SYSCFG_MEMRMP;
-	uint32 SYSCFG_PMC;
-	uint32 SYSCFG_EXTICR1;
-	uint32 SYSCFG_EXTICR2;
-	uint32 SYSCFG_EXTICR3;
-	uint32 SYSCFG_EXTICR4;
-	uint32 SYSCFG_CMPCR;
-}SYSCFG_EXTICR;
+#define LOCKED 					0
+#define UNLOCKED 				1
 
-#define NVIC_ISER0 (*(uint32 *)0xE000E100)
+#define CLOSED 					0
+#define OPENED					1
 
-#define EXTI ((ExtiType *)0x40013C00)
-#define SYSCFG_EXTI ((SYSCFG_EXTICR *)0x40013800)
+#define DOOR_UNLOCK_BTN				1
+#define DOOR_HANDLE_BTN				0
 
-sint8 Seven_seg_counter = 0;
+#define VEHICLE_LED				0
+#define HAZARD_LED				1
+#define AMBIENT_LED				2
 
-void Exti_Enable(uint8 line_num)
+#define PRESSED 				0
+#define RELEASED				1
+
+/* Initial state */
+uint8 Vehicle_Lock = LOCKED;
+uint8 Vehicle_Door = CLOSED;
+uint8 vehicle_led_flag = 0;
+uint8 hazard_led_flag = 0;
+uint8 ambient_led_flag = 0;
+uint8 closing = 0;
+uint8 handle_flag=0;
+uint8 no_btn_pressed = 0;
+
+void CheckHandle1(void);
+void CheckHandle2(void);
+void CheckDoor1(void);
+void CheckDoor2(void);
+void CheckNoBtnPressed(void);
+void NoBtnPressed(void);
+void CheckHazardLEd(uint8 state);
+void CheckAmbientLEd(uint8 state);
+void CheckVechileLEd(uint8 state);
+void main(void)
 {
-	SET_BIT(EXTI->IMR, line_num);  // enable interrupt on this line
-}
-
-void Exti_Disable(uint8 line_num)
-{
-	CLEAR_BIT(EXTI->IMR, line_num);  // disable interrupt on this line
-}
-
-typedef struct{
-	uint8 line_num;          // enable line
-	uint8 EXTI_NVIC_LineNum; // enable nvic_line which start from 6
-	uint8 edgeType;			 // choose falling edge or raising edge
-	uint8 Mcu_pin_num;		// choose which pin in MicroController
-	uint8 PortName;
-}EXT_config;
-
-
-//void Exti_Init(EXT_config * ext_config)
-//{
-//	/* */
-//	Exti_Enable(ext_config->line_num);
-//
-//	SET_BIT(NVIC_ISER0, ext_config->EXTI_NVIC_LineNum);
-//
-//	if (ext_config->edgeType == 0)
-//	{
-//		SET_BIT(EXTI->RTSR, ext_config->line_num);
-//	}
-//	else if (ext_config->edgeType == 1)
-//	{
-//		SET_BIT(EXTI->FTSR, ext_config->line_num);
-//	}
-//	else
-//	{
-//		/* do nothing */
-//	}
-//
-//	Gpio_ConfigPin(ext_config->PortName, ext_config->Mcu_pin_num, GPIO_INPUT, GPIO_PULL_UP);
-//	//Gpio_ConfigPin(GPIO_B, ext_config->Mcu_pin_num, GPIO_INPUT, GPIO_PULL_UP);
-//	//Gpio_ConfigPin(GPIO_C, ext_config->Mcu_pin_num, GPIO_INPUT, GPIO_PULL_UP);
-//	Gpio_ConfigPin(ext_config->PortName, ext_config->Mcu_pin_num, GPIO_INPUT, GPIO_PULL_UP);
-//
-//
-//	/* port D : 0011*/
-//	SET_BIT(SYSCFG_EXTI->SYSCFG_EXTICR1,0);
-//	SET_BIT(SYSCFG_EXTI->SYSCFG_EXTICR1,1);
-//	CLEAR_BIT(SYSCFG_EXTI->SYSCFG_EXTICR1,2);
-//	CLEAR_BIT(SYSCFG_EXTI->SYSCFG_EXTICR1,3);
-//
-//}
-/* interrupt line 0 config :
- * Enable interrupt line for EXIT = 0,
- * EXTI_NVIC_LineNum = 6,
- * edgeType = 1-->(Falling edge), 0-->(Raising edge)
- * Mcu_pin_num = 0
- * port
- * */
-//EXT_config Ext0_configurations = {0,6,Falling_edge,0,GPIO_A};
-//EXT_config Ext1_configurations = {1,7,Falling_edge,1,GPIO_D};
-
-
-void main(void) {
-
-	/*Enable clk for ports */
+	/* Enable clock */
 	Rcc_Init();
 	Rcc_Enable(RCC_GPIOA);
 	Rcc_Enable(RCC_GPIOB);
@@ -105,152 +49,264 @@ void main(void) {
 	Rcc_Enable(RCC_GPIOD);
 	Rcc_Enable(RCC_TIM4);
 	GPT_Init();
-//	Rcc_Enable(RCC_SYSCFG);
 
-//	Exti_Init(&Ext0_configurations);
-//	Exti_Init(&Ext1_configurations);
+	/* Buttons Configuration */
+	Gpio_ConfigPin(GPIO_A,DOOR_UNLOCK_BTN,GPIO_INPUT,GPIO_PULL_UP);
+	Gpio_ConfigPin(GPIO_A,DOOR_HANDLE_BTN,GPIO_INPUT,GPIO_PULL_UP);
 
-	/*Buttons*/
-	Gpio_ConfigPin(GPIO_A,0,GPIO_INPUT,GPIO_PULL_UP); // Door button
-	Gpio_ConfigPin(GPIO_A,1,GPIO_INPUT,GPIO_PULL_UP); // handel_button
+	/* LEDs Configuration */
+	Gpio_ConfigPin(GPIO_B,VEHICLE_LED,GPIO_OUTPUT,GPIO_PUSH_PULL);
+	Gpio_ConfigPin(GPIO_B,HAZARD_LED,GPIO_OUTPUT,GPIO_PUSH_PULL);
+	Gpio_ConfigPin(GPIO_B,AMBIENT_LED,GPIO_OUTPUT,GPIO_PUSH_PULL);
 
+	while (1)
+	{
+		if(Vehicle_Lock == LOCKED && Vehicle_Door == CLOSED && closing == 0)
+		{
+			CheckHandle1();
+		}
 
-	/*Leds*/
-	Gpio_ConfigPin(GPIO_B,0,GPIO_OUTPUT,GPIO_PUSH_PULL); // Vechile led
-	Gpio_ConfigPin(GPIO_B,1,GPIO_OUTPUT,GPIO_PUSH_PULL); // Hazard Led
-	Gpio_ConfigPin(GPIO_B,2,GPIO_OUTPUT,GPIO_PUSH_PULL); // Ambient led
-	uint8 Vechile_Lock=Locked;
-	uint8 Vechile_Door=Closed;
+		if(Vehicle_Lock == UNLOCKED && Vehicle_Door == CLOSED && closing == 0)
+		{
+			if(no_btn_pressed == 0)
+			{
+				CheckNoBtnPressed();
+			}
 
-	/*Configuration Pins For 7 Segment  */
-//	for (uint32 counter = 0; counter < 7; counter++) {
-//		Gpio_ConfigPin(GPIO_B, counter, GPIO_OUTPUT, GPIO_PUSH_PULL);
-//
-//	}
+			if( Gpio_ReadPin(GPIO_A,DOOR_UNLOCK_BTN) == PRESSED)
+			{
+				CheckDoor1();
+			}
+			NoBtnPressed();
 
+		}
 
-	while (1) {
-		/* do nothing */
+		if(Vehicle_Lock == UNLOCKED && Vehicle_Door == OPENED)
+		{
+			CheckAmbientLEd(0);
+			GPT_StartTimer(400);
+			while(GPT_CheckTimeIsElapsed() != 1);
+			CheckDoor2();
+		}
+		if(Vehicle_Lock == UNLOCKED && Vehicle_Door == CLOSED && closing == 1)
+		{
+			CheckVechileLEd(1);
+			CheckHazardLEd(1);
+			if(GPT_CheckTimeIsElapsed() == 1)
+			{
+				Gpio_WritePin(GPIO_B,AMBIENT_LED,LOW);
+				ambient_led_flag = 0;
+			}
+			CheckHandle2();
+		}
+		if(Vehicle_Lock == LOCKED && Vehicle_Door == CLOSED && closing == 1)
+		{
+			CheckAmbientLEd(1);
 
-		if(Gpio_ReadPin(GPIO_A,1)==0){
-			GPT_StartTimer(30);
-			while(GPT_CheckTimeIsElapsed()!=1);
-			if(Gpio_ReadPin(GPIO_A,1)==0){
-				Vechile_Lock=UnLocked;
-				Gpio_WritePin(GPIO_B,0,HIGH);
-				GPT_StartTimer(2000);
+			if (GPT_GetElapsedTime() < 1000 && GPT_GetElapsedTime() > 0)
+			{
+				CheckHazardLEd(0);
+			}
+			if (GPT_GetElapsedTime() < 3000 && GPT_GetElapsedTime() > 2000)
+			{
+				CheckHazardLEd(0);
+			}
+			if(GPT_GetElapsedTime() < 2000 && GPT_GetElapsedTime() > 1000)
+			{
+				Gpio_WritePin(GPIO_B,HAZARD_LED,LOW);
+				hazard_led_flag = 0;
+			}
+			if(GPT_GetElapsedTime() > 3000)
+			{
+				Gpio_WritePin(GPIO_B,HAZARD_LED,LOW);
+				hazard_led_flag = 0;
+			}
+			if(GPT_CheckTimeIsElapsed() == 1)
+			{
+				Gpio_WritePin(GPIO_B,HAZARD_LED,LOW);
+				hazard_led_flag = 0;
+			}
 
-				while(GPT_CheckTimeIsElapsed()!=1){
-					Gpio_WritePin(GPIO_B,2,HIGH);
-						while(GPT_CheckTimeIsElapsed()<=500){
-							Gpio_WritePin(GPIO_B,1,HIGH);
-						}
-						Gpio_WritePin(GPIO_B,1,LOW);
-					}
-					Gpio_WritePin(GPIO_B,2,LOW);
-				}
+		}
 
-//			if(Gpio_ReadPin(GPIO_A,0)==0){
-//				GPT_StartTimer(30);
-//				while(GPT_CheckTimeIsElapsed()!=1);
-//				if(Gpio_ReadPin(GPIO_A,0)==0){
-//					Vechile_Door=Open;
-//					Gpio_WritePin(GPIO_B,2,HIGH);
-//				}
-//
-//			}
-//			if(Gpio_ReadPin(GPIO_A,0)==0){
-//				GPT_StartTimer(30);
-//				while(GPT_CheckTimeIsElapsed()!=1);
-//				if(Gpio_ReadPin(GPIO_A,0)==0){
-//					GPT_StartTimer(1000);
-//					Vechile_Door=Closed;
-//					Gpio_WritePin(GPIO_B,0,LOW);
-//					Gpio_WritePin(GPIO_B,1,LOW);
-//					while(GPT_CheckTimeIsElapsed()!=1){
-//						Gpio_WritePin(GPIO_B,2,HIGH);
-//						}
-//						Gpio_WritePin(GPIO_B,2,LOW);
-//
-//				}
-//			}
-//			if(Gpio_ReadPin(GPIO_A,1)==0){
-//				GPT_StartTimer(30);
-//				while(GPT_CheckTimeIsElapsed()!=1);
-//				if(Gpio_ReadPin(GPIO_A,1)==0){
-//					Vechile_Door=Closed;
-//					Gpio_WritePin(GPIO_B,0,LOW);
-//					GPT_StartTimer(2000);
-//					while(GPT_CheckTimeIsElapsed()!=1){
-//						Gpio_WritePin(GPIO_B,2,LOW);
-//						while(GPT_CheckTimeIsElapsed()<=500){
-//							Gpio_WritePin(GPIO_B,1,HIGH);
-//						}
-//						while(GPT_CheckTimeIsElapsed()<=1000){
-//							Gpio_WritePin(GPIO_B,1,LOW);
-//						}
-//						while(GPT_CheckTimeIsElapsed()<=1500){
-//							Gpio_WritePin(GPIO_B,1,HIGH);
-//						}
-//						while(GPT_CheckTimeIsElapsed()<=2000){
-//							Gpio_WritePin(GPIO_B,1,LOW);
-//						}
-//
-//
-//						}
-//					}
-//				}
+	}
+}
 
+void CheckHandle1(void)
+{
+	if( Gpio_ReadPin(GPIO_A,DOOR_HANDLE_BTN) == PRESSED && handle_flag==0)
+	{
+		handle_flag=1;
+		GPT_StartTimer(30);
+		while(GPT_CheckTimeIsElapsed() != 1);
+		if( Gpio_ReadPin(GPIO_A,DOOR_HANDLE_BTN) == PRESSED)
+		{
+			GPT_StartTimer(10000);
+			Vehicle_Lock = UNLOCKED;
+		}
+	}
+	else{
+		handle_flag=0;
+	}
 
+}
+
+void CheckHandle2(void)
+{
+	if( Gpio_ReadPin(GPIO_A,DOOR_HANDLE_BTN) == PRESSED)
+	{
+		GPT_StartTimer(30);
+		while(GPT_CheckTimeIsElapsed() != 1);
+		if( Gpio_ReadPin(GPIO_A,DOOR_HANDLE_BTN) == PRESSED)
+		{
+			GPT_StartTimer(4000);
+			Vehicle_Lock = LOCKED;
+			closing = 1;
 		}
 	}
 }
 
+void CheckDoor1(void)
+{
+	GPT_StartTimer(30);
+	while(GPT_CheckTimeIsElapsed() != 1);
+	if( Gpio_ReadPin(GPIO_A,DOOR_UNLOCK_BTN	) == PRESSED)
+	{
+		Vehicle_Door = OPENED;
+	}
+}
 
+void CheckDoor2(void)
+{
+	if( Gpio_ReadPin(GPIO_A,DOOR_UNLOCK_BTN) == PRESSED)
+	{
+		GPT_StartTimer(30);
+		while(GPT_CheckTimeIsElapsed() != 1);
+		if( Gpio_ReadPin(GPIO_A,DOOR_UNLOCK_BTN	) == PRESSED)
+		{
+			GPT_StartTimer(6000);
+			Vehicle_Door = CLOSED;
+			closing = 1;
+		}
 
-//void EXTI0_IRQHandler(void)
-//{
-//	Exti_Disable(1);
-//	Exti_Disable(2);
-//	Exti_Disable(3);
-//	Exti_Disable(4);
-//
-//	Seven_seg_counter++;
-//	increament(Seven_seg_counter);
-//
-//	if(Seven_seg_counter > 9)
-//	{
-//		Seven_seg_counter = 0;
-//	}
-//	/* clear pending flag */
-//	SET_BIT(EXTI->PR, 0);
-//	/*Race conditions*/
-//	Exti_Enable(1);
-//	Exti_Enable(2);
-//	Exti_Enable(3);
-//	Exti_Enable(4);
-//
-//}
-//
-//void EXTI1_IRQHandler(void)
-//{
-//	Exti_Disable(0);
-//	Exti_Disable(2);
-//	Exti_Disable(3);
-//	Exti_Disable(4);
-//	Seven_seg_counter--;
-//	decrament(Seven_seg_counter);
-//
-//	if(Seven_seg_counter == 0)
-//		{
-//			Seven_seg_counter = 10;
-//		}
-//	/* clear pending flag */
-//	SET_BIT(EXTI->PR, 1);
-//	/*Race conditions*/
-//	Exti_Enable(0);
-//	Exti_Enable(2);
-//	Exti_Enable(3);
-//	Exti_Enable(4);
-//}
+	}
+}
 
+void CheckNoBtnPressed(void)
+{
+	if(GPT_CheckTimeIsElapsed() == 1)
+	{
+		GPT_StartTimer(2000);
+		no_btn_pressed = 1;
+	}
+}
+
+void NoBtnPressed(void)
+{
+	if(no_btn_pressed == 1)
+		{
+		    CheckVechileLEd(1);
+			CheckAmbientLEd(1);
+			if (GPT_GetElapsedTime() < 500 && GPT_GetElapsedTime() > 0)
+			{
+				CheckHazardLEd(0);
+			}
+			if (GPT_GetElapsedTime() < 1500 && GPT_GetElapsedTime() > 1000)
+			{
+				CheckHazardLEd(0);
+			}
+			if(GPT_GetElapsedTime() < 1000 && GPT_GetElapsedTime() > 500)
+			{
+				Gpio_WritePin(GPIO_B,HAZARD_LED,LOW);
+				hazard_led_flag = 0;
+			}
+			if(GPT_GetElapsedTime() > 1500)
+			{
+				Gpio_WritePin(GPIO_B,HAZARD_LED,LOW);
+				hazard_led_flag = 0;
+			}
+			if(GPT_CheckTimeIsElapsed() == 1)
+			{
+				Gpio_WritePin(GPIO_B,HAZARD_LED,LOW);
+				Vehicle_Lock=LOCKED;
+				no_btn_pressed=0;
+				hazard_led_flag = 0;
+			}
+		}
+		else
+		{
+			CheckVechileLEd(0);
+			if(GPT_GetElapsedTime() < 500 && GPT_GetElapsedTime() > 0 )
+			{
+				CheckHazardLEd(0);
+			}
+			else if(GPT_GetElapsedTime() > 500)
+			{
+				Gpio_WritePin(GPIO_B,HAZARD_LED,LOW);
+				hazard_led_flag = 0;
+			}
+			if(GPT_GetElapsedTime() < 2000)
+			{
+				CheckAmbientLEd(0);
+			}
+			if(GPT_GetElapsedTime() > 2000)
+			{
+				CheckAmbientLEd(1);
+			}
+		}
+}
+
+void CheckHazardLEd(uint8 state)
+{
+	if(state==0){
+		if (hazard_led_flag == state)
+		{
+			Gpio_WritePin(GPIO_B,HAZARD_LED,HIGH);
+			hazard_led_flag = !state;
+		}
+		else{
+			if (hazard_led_flag == state)
+			{
+				Gpio_WritePin(GPIO_B,HAZARD_LED,LOW);
+				hazard_led_flag = !state;
+			}
+		}
+	}
+
+}
+
+void CheckAmbientLEd(uint8 state)
+{
+	if(state==0){
+		if (ambient_led_flag == 0)
+		{
+			Gpio_WritePin(GPIO_B,AMBIENT_LED,HIGH);
+			ambient_led_flag = 1;
+		}
+	}
+	else{
+		if (ambient_led_flag == 1)
+		{
+			Gpio_WritePin(GPIO_B,AMBIENT_LED,LOW);
+			ambient_led_flag = 0;
+		}
+	}
+}
+
+void CheckVechileLEd(uint8 state)
+{
+	if(state==0){
+		if (vehicle_led_flag == 0)
+		{
+			Gpio_WritePin(GPIO_B,VEHICLE_LED,HIGH);
+			vehicle_led_flag = 1;
+		}
+	}
+	else{
+		if (vehicle_led_flag == 1)
+		{
+			Gpio_WritePin(GPIO_B,VEHICLE_LED,LOW);
+			vehicle_led_flag = 0;
+		}
+	}
+}
