@@ -1,14 +1,26 @@
-/*
- * TIM.c
+/******************************************************************************
  *
- *  Created on: Jun 6, 2023
- *      Author: Misara
- */
+ * Author: Misara Ahmed
+ *
+ * Date: 6/6/2023
+ *
+ * Driver: GENRAL PURPOSE TIMER
+ * 
+ * Description: This driver is used to configure the general purpose timer (GPT)
+ * 
+ * File Name: TIM.c (Source File)
+ *
+ *******************************************************************************/
 
 #include "TIM.h"
 #include "RCC.h"
 #include "GPIO.h"
 
+/* 
+ * Description: This function is used to initialize and configure the general purpose timer (GPT)
+ * Inputs: void
+ * Return: void
+ */
 void GPT_Init(void)
 {
     // Set the prescaler value (PSC)    
@@ -20,13 +32,13 @@ void GPT_Init(void)
     // Set the direction (DIR) bit to be up-counting
     TIM4_CR1 &= ~(1 << 4);
 
-    // Disable the auto-reload preload (ARPE)
-    //TIM4_CR1 &= ~(1 << 7);
-
-    //TIM4_CR1 |= (1 << 7);
-
 }
 
+/* 
+ * Description: This function is used to start the general purpose timer (GPT)
+ * Inputs: The number of ticks after which the timer overflows (OverFlowTicks)
+ * Return: void
+ */
 void GPT_StartTimer(uint32 OverFlowTicks)
 {
     // Set the auto-reload value (ARR)
@@ -39,6 +51,12 @@ void GPT_StartTimer(uint32 OverFlowTicks)
     TIM4_CNT = 1;
 }
 
+/* 
+ * Description: This function is used to check if the general purpose timer (GPT) has finished counting
+ * Inputs: void
+ * Return: 1 if the timer has finished counting
+ *         0 otherwise
+ */
 uint8 GPT_CheckTimeIsElapsed(void)
 {
     // Check if the counter (CNT) has reached the auto-reload value (ARR)
@@ -59,12 +77,22 @@ uint8 GPT_CheckTimeIsElapsed(void)
     }
 }
 
+/* 
+ * Description: This function is used to get the elapsed time (counts) since the general purpose timer (GPT) has started
+ * Inputs: void
+ * Return: The elapsed time in ticks.
+ */
 uint32 GPT_GetElapsedTime(void)
 {
     // Return the current value of the counter (CNT) which represents the time in ticks (msec)
     return TIM4_CNT;
 }
 
+/* 
+ * Description: This function is used to calculate the remaining time (counts) for the general purpose timer (GPT) to finish counting
+ * Inputs: void
+ * Return: The remaining time in ticks.
+ */
 uint32 GPT_GetRemainingTime(void)
 {
     // Return the remaining time to overflow (ARR - CNT) which represents the remaining time in ticks (msec)
