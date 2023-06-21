@@ -253,3 +253,32 @@ void ledBlinking(uint8 Num_Of_Times, uint32 On_duration, uint8 led , uint8 * fla
 	}
 }
 
+
+//#define TIM4_TICK_TIME                          1
+//#define TIM4_TICKS_PER_MS                       (TIM4_PRESCALER / TIM4_TICK_TIME)
+
+//#define TIM4 ((TIMRegs *)0x40000800)
+
+// typedef struct 
+// {
+// 	uint16 CR1;
+// 	uint16 CR2;
+// 	uint16 SMCR;
+// 	uint16 DIER;
+// 	uint16 SR;
+// 	uint16 EGR;
+//     uint16 CCMR1;
+//     uint16 CCMR2;
+//     uint16 CCER;
+//     uint32 CNT;
+//     uint16 PSC;
+//     uint32 ARR;
+//     uint32 CCR1;
+//     uint32 CCR2;
+//     uint32 CCR3;
+//     uint32 CCR4;
+//     uint16 DCR;
+//     uint16 DMAR;
+
+// } TIMRegs;
+
