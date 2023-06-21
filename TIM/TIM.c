@@ -29,7 +29,7 @@ void GPT_Init(void)
     // Clear the CMS bits and set the edge-aligned mode to be depending on the direction bit
     TIM4_CR1 &= ~(3 << 5);
 
-    // Set the direction (DIR) bit to be up-counting
+    // Clear the direction (DIR) bit to be up-counting
     TIM4_CR1 &= ~(1 << 4);
 
 }
