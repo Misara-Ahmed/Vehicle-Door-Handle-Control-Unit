@@ -1,8 +1,21 @@
+/******************************************************************************
+ *
+ * Author: Team 27
+ *
+ * Date: 18/6/2023
+ *
+ * Application: Vehicle Door Handle Control Unit
+ * 
+ * File Name: App.c (Source File)
+ *
+ *******************************************************************************/
+
 #include "Gpio.h"
 #include "Rcc.h"
 #include "Std_Types.h"
 #include "Bit_Operations.h"
 #include "TIM.h"
+
 
 #define LOCKED 						0
 #define UNLOCKED 					1
@@ -23,8 +36,24 @@
 #define ON							1
 #define OFF							0
 
+/*
+ * Description: This function is used to perform an action on a specific LED
+ * Inputs: The action to be performed (action)
+ *         The address of the flag of the LED (flag)
+ *         The LED to be controlled (led)
+ * Return: void
+*/
 void ledAction(uint8 action, uint8 * flag, uint8 led);
 
+/*
+ * Description: This function is used to blink a specific LED
+ * Inputs: The number of times the LED blinks (Num_Of_Times)
+ *         The duration of each blink (On_duration)
+ *         The LED to be controlled (led)
+ *         The address of the flag of the LED (flag)
+ *         The time elapsed by the timer (time)
+ * Return: void
+*/
 void ledBlinking(uint8 Num_Of_Times, uint32 On_duration, uint8 led , uint8 * flag ,uint32 time);
 
 void main(void)
@@ -53,43 +82,56 @@ void main(void)
 	Gpio_WritePin(GPIO_B,HAZARD_LED,LOW);
 	Gpio_WritePin(GPIO_B,AMBIENT_LED,LOW);
 
+	/* Flags */
 	uint8 vehicle_led_flag = 0;
 	uint8 hazard_led_flag = 0;
 	uint8 ambient_led_flag = 0;
 	uint8 closing = 0;
-	//uint8 locking = 0;
 	uint8 no_btn_pressed = 0;
 	uint8 handle_btn_flag = 0;
 	uint8 lock_btn_flag = 0;
 
-
-
 	while (1)
 	{
+		// Initial state where the vehicle is locked and the door is closed
 		if (Vehicle_Lock == LOCKED && Vehicle_Door == CLOSED && closing == 0)
 		{
+			// Check if the door handle button is pressed
 			if ( Gpio_ReadPin(GPIO_A,DOOR_HANDLE_BTN) == PRESSED && handle_btn_flag == 0)
 			{
+				// Wait for debouncing
 				GPT_StartTimer(30);
 				while (GPT_CheckTimeIsElapsed() != 1);
 				if ( Gpio_ReadPin(GPIO_A,DOOR_HANDLE_BTN) == PRESSED && handle_btn_flag == 0)
 				{
+					// Set the button flag to 1 to prevent multiple entering unless the button is released
 					handle_btn_flag = 1;
+
+					// Start the timer for 10 seconds
 					GPT_StartTimer(10000);
+
+					// Change the state of the vehicle to unlocked to enter the next state
 					Vehicle_Lock = UNLOCKED;
 				}
 			}
+			// Check if the button is released
 			if ( Gpio_ReadPin(GPIO_A,DOOR_HANDLE_BTN) == RELEASED )
 			{
+				// Reset the button flag
 				handle_btn_flag = 0;
 			}
 		}
+
+		// Second state where the vehicle is unlocked and the door is closed
 		if (Vehicle_Lock == UNLOCKED && Vehicle_Door == CLOSED && closing == 0)
 		{
+
 			if (no_btn_pressed == 0)
 			{
+				// Check if we elapsed 10 seconds without pressing the button
 				if (GPT_CheckTimeIsElapsed() == 1)
 				{
+					// Change the state of the vehicle to locked to enter the next state
 					GPT_StartTimer(2000);
 					no_btn_pressed = 1;
 				}
@@ -145,7 +187,6 @@ void main(void)
 		{
 			ledAction(ON, &ambient_led_flag, AMBIENT_LED);
 
-			//GPT_StartTimer(100);
 			while (GPT_CheckTimeIsElapsed() != 1);
 			if ( Gpio_ReadPin(GPIO_A,DOOR_UNLOCK_BTN) == PRESSED && lock_btn_flag == 0)
 			{
@@ -208,6 +249,13 @@ void main(void)
 	}
 }
 
+/*
+ * Description: This function is used to perform an action on a specific LED
+ * Inputs: The action to be performed (action)
+ *         The address of the flag of the LED (flag)
+ *         The LED to be controlled (led)
+ * Return: void
+*/
 void ledAction(uint8 action, uint8 * flag, uint8 led)
 {
 	if(action == ON)
@@ -228,7 +276,15 @@ void ledAction(uint8 action, uint8 * flag, uint8 led)
 	}
 }
 
-
+/*
+ * Description: This function is used to blink a specific LED
+ * Inputs: The number of times the LED blinks (Num_Of_Times)
+ *         The duration of each blink (On_duration)
+ *         The LED to be controlled (led)
+ *         The address of the flag of the LED (flag)
+ *         The time elapsed by the timer (time)
+ * Return: void
+*/
 void ledBlinking(uint8 Num_Of_Times, uint32 On_duration, uint8 led , uint8 * flag ,uint32 time)
 {
 	static uint8 itr = 1;
