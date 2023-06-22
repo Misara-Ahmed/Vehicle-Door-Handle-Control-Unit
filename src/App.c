@@ -1,7 +1,5 @@
 /******************************************************************************
  *
- * Author: Team 27
- *
  * Date: 18/6/2023
  *
  * Application: Vehicle Door Handle Control Unit
@@ -17,21 +15,21 @@
 #include "TIM.h"
 
 
-#define LOCKED 						0
-#define UNLOCKED 					1
+#define LOCKED 							0
+#define UNLOCKED 						1
 
-#define CLOSED 						0
-#define OPENED						1
+#define CLOSED 							0
+#define OPENED							1
 
-#define DOOR_UNLOCK_BTN				1
-#define DOOR_HANDLE_BTN				0
+#define DOOR_UNLOCK_BTN						1
+#define DOOR_HANDLE_BTN						0
 
-#define VEHICLE_LED					0
-#define HAZARD_LED					1
-#define AMBIENT_LED					2
+#define VEHICLE_LED						0
+#define HAZARD_LED						1
+#define AMBIENT_LED						2
 
-#define PRESSED 					0
-#define RELEASED					1
+#define PRESSED 						0
+#define RELEASED						1
 
 #define ON							1
 #define OFF							0
